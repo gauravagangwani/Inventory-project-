@@ -97,10 +97,6 @@ function AuthScreen({ onLogin }) {
           }}>
             {loading ? <><span style={{ display: 'inline-block', width: 16, height: 16, border: '2.5px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />Signing in…</> : 'Sign In'}
           </button>
-
-          <p style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#8A96A8' }}>
-            Default: <strong>admin</strong> / <strong>krishna123</strong>
-          </p>
         </div>
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
