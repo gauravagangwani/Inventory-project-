@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shri Krishna Sales — Management System</title>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #F4F7FB; font-family: 'Open Sans', sans-serif; color: #1A2332; -webkit-font-smoothing: antialiased; }
+  input, select, textarea, button { font-family: 'Open Sans', sans-serif; }
+  @keyframes modalIn { from { opacity:0; transform:translateY(-12px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes fadeSlide { from { opacity:0; transform:translateX(10px); } to { opacity:1; transform:translateX(0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .screen-enter { animation: fadeSlide 0.2s ease; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+
+  /* ── DARK MODE ─────────────────────────────────────────────────────────── */
+  :root {
+    --bg: #F4F7FB;
+    --surface: #ffffff;
+    --surface2: #F8FAFC;
+    --border: #E8ECF2;
+    --border2: #F1F5F9;
+    --text1: #1A2332;
+    --text2: #374151;
+    --text3: #6B7A8D;
+    --text4: #8A96A8;
+    --input-bg: #FAFBFD;
+    --header-bg: #ffffff;
+    --shadow: rgba(0,0,0,0.04);
+  }
+  body.dark {
+    --bg: #0F172A;
+    --surface: #1E293B;
+    --surface2: #162032;
+    --border: #2D3A4A;
+    --border2: #243040;
+    --text1: #F1F5F9;
+    --text2: #CBD5E1;
+    --text3: #94A3B8;
+    --text4: #64748B;
+    --input-bg: #162032;
+    --header-bg: #1E293B;
+    --shadow: rgba(0,0,0,0.20);
+  }
+  body { background: var(--bg); color: var(--text1); }
+
+  /* ── PRINT STYLES ──────────────────────────────────────────────────────── */
+  @media print {
+    body > #root > * { display: none !important; }
+    #print-wrapper { display: block !important; position: fixed; inset: 0; background: #fff; z-index: 99999; padding: 0; }
+    #invoice-print-area { max-width: 100% !important; font-size: 12pt; }
+    @page { margin: 12mm; size: A4; }
+  }
+  #print-wrapper { display: none; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+<div id="print-wrapper"></div>
+
+<script type="text/babel" src="db.jsx"></script>
+<script type="text/babel" src="app-components.jsx"></script>
+<script type="text/babel" src="screen-auth.jsx"></script>
+<script type="text/babel" src="screen-dashboard.jsx"></script>
+<script type="text/babel" src="screen-inventory.jsx"></script>
+<script type="text/babel" src="screen-customers.jsx"></script>
+<script type="text/babel" src="screen-billing.jsx"></script>
+<script type="text/babel" src="screen-reports.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel">
+// Init DB seed data on first load
+DB.seed();
+
+// Print helper — renders invoice into #print-wrapper for window.print()
+window.addEventListener('beforeprint', () => {
+  const inv = window.__printInvoice;
+  if (!inv) return;
+  const biz = DB.settings.get();
+  const wrapper = document.getElementById('print-wrapper');
+  wrapper.style.display = 'block';
+  ReactDOM.render(React.createElement(InvoicePrintView, { inv, biz }), wrapper);
+});
+window.addEventListener('afterprint', () => {
+  const wrapper = document.getElementById('print-wrapper');
+  wrapper.style.display = 'none';
+  ReactDOM.unmountComponentAtNode(wrapper);
+  window.__printInvoice = null;
+});
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#2563EB",
+  "sidebarColor": "#1E293B",
+  "density": "comfortable",
+  "darkMode": true
+}/*EDITMODE-END*/;
+
+const SCREEN_TITLES = {
+  dashboard: 'Dashboard', inventory: 'Inventory', customers: 'Customers',
+  billing: 'Billing', reports: 'Reports', expenses: 'Expenses', settings: 'Settings',
+};
+
+function SettingsScreen({ onRefresh }) {
+  const [biz, setBiz] = React.useState(DB.settings.get());
+  const [auth, setAuth] = React.useState({ username: DB.auth.getCredentials().username, newPw: '', confirmPw: '' });
+  const [toast, setToast] = React.useState(null);
+  const set = k => e => setBiz(b => ({ ...b, [k]: e.target.value }));
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <Section style={{ marginBottom: 16 }}>
+        <SectionHeader title="Business Profile" />
+        <div style={{ padding: '18px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div style={{ gridColumn: '1/-1' }}><FormField label="Business Name"><Input value={biz.businessName} onChange={set('businessName')} /></FormField></div>
+            <FormField label="GSTIN"><Input value={biz.gstin} onChange={set('gstin')} placeholder="07AAECS1234A1ZK" /></FormField>
+            <FormField label="Phone"><Input value={biz.phone} onChange={set('phone')} /></FormField>
+            <FormField label="Email"><Input value={biz.email} onChange={set('email')} /></FormField>
+            <div style={{ gridColumn: '1/-1' }}><FormField label="Address"><Input value={biz.address} onChange={set('address')} /></FormField></div>
+            <FormField label="City / PIN"><Input value={biz.city} onChange={set('city')} /></FormField>
+          </div>
+          <div style={{ marginTop: 14 }}><Btn variant="primary" onClick={() => { DB.settings.set(biz); setToast({ msg: 'Profile saved!', type: 'success' }); onRefresh(); }}>Save Profile</Btn></div>
+        </div>
+      </Section>
+
+      <Section style={{ marginBottom: 16 }}>
+        <SectionHeader title="Bank & Payment Details" />
+        <div style={{ padding: '18px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <FormField label="Bank Name"><Input value={biz.bankName} onChange={set('bankName')} /></FormField>
+            <FormField label="Account Number"><Input value={biz.accountNo} onChange={set('accountNo')} /></FormField>
+            <FormField label="IFSC Code"><Input value={biz.ifsc} onChange={set('ifsc')} /></FormField>
+            <FormField label="UPI ID"><Input value={biz.upiId} onChange={set('upiId')} placeholder="name@upi" /></FormField>
+          </div>
+          <div style={{ marginTop: 14 }}><Btn variant="primary" onClick={() => { DB.settings.set(biz); setToast({ msg: 'Bank details saved!', type: 'success' }); }}>Save</Btn></div>
+        </div>
+      </Section>
+
+      <Section style={{ marginBottom: 16 }}>
+        <SectionHeader title="Invoice Settings" />
+        <div style={{ padding: '18px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <FormField label="Invoice Prefix"><Input value={biz.invoicePrefix} onChange={set('invoicePrefix')} placeholder="SKS" /></FormField>
+            <FormField label="Default GST %">
+              <Select value={biz.defaultGst} onChange={set('defaultGst')} options={[{value:0,label:'0%'},{value:5,label:'5%'},{value:12,label:'12%'},{value:18,label:'18%'},{value:28,label:'28%'}]} />
+            </FormField>
+          </div>
+          <div style={{ marginTop: 14 }}><Btn variant="primary" onClick={() => { DB.settings.set(biz); setToast({ msg: 'Invoice settings saved!', type: 'success' }); }}>Save</Btn></div>
+        </div>
+      </Section>
+
+      <Section>
+        <SectionHeader title="Change Password" />
+        <div style={{ padding: '18px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+            <FormField label="Username"><Input value={auth.username} onChange={e => setAuth(a => ({ ...a, username: e.target.value }))} /></FormField>
+            <FormField label="New Password"><Input type="password" value={auth.newPw} onChange={e => setAuth(a => ({ ...a, newPw: e.target.value }))} /></FormField>
+            <FormField label="Confirm Password"><Input type="password" value={auth.confirmPw} onChange={e => setAuth(a => ({ ...a, confirmPw: e.target.value }))} /></FormField>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <Btn variant="primary" onClick={() => {
+              if (!auth.newPw) return;
+              if (auth.newPw !== auth.confirmPw) { setToast({ msg: 'Passwords do not match', type: 'error' }); return; }
+              DB.auth.setCredentials(auth.username, auth.newPw);
+              setAuth(a => ({ ...a, newPw: '', confirmPw: '' }));
+              setToast({ msg: 'Password updated!', type: 'success' });
+            }}>Update Password</Btn>
+          </div>
+        </div>
+      </Section>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+    </div>
+  );
+}
+
+function App() {
+  const [loggedIn, setLoggedIn] = React.useState(DB.auth.isLoggedIn());
+  const [screen, setScreen] = React.useState('dashboard');
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const [animKey, setAnimKey] = React.useState(0);
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [notifOpen, setNotifOpen] = React.useState(false);
+
+  // Apply dark mode class to body
+  React.useEffect(() => {
+    document.body.classList.toggle('dark', !!tweaks.darkMode);
+  }, [tweaks.darkMode]);
+
+  const dark = !!tweaks.darkMode;
+
+  const onRefresh = () => setRefreshKey(k => k + 1);
+  const navigate = id => { setScreen(id); setAnimKey(k => k + 1); };
+  const handleLogout = () => { DB.auth.logout(); setLoggedIn(false); };
+
+  if (!loggedIn) return <AuthScreen onLogin={() => setLoggedIn(true)} />;
+
+  const biz = DB.settings.get();
+  const lowStockCount = DB.analytics.lowStockItems().length;
+  const pendingCount = DB.analytics.pendingCount();
+
+  const screens = {
+    dashboard: <DashboardScreen onNav={navigate} refreshKey={refreshKey} />,
+    inventory: <InventoryScreen onRefresh={onRefresh} refreshKey={refreshKey} />,
+    customers: <CustomersScreen onRefresh={onRefresh} refreshKey={refreshKey} />,
+    billing: <BillingScreen onRefresh={onRefresh} refreshKey={refreshKey} />,
+    reports: <ReportsScreen refreshKey={refreshKey} />,
+    expenses: <ExpensesScreen onRefresh={onRefresh} refreshKey={refreshKey} />,
+    settings: <SettingsScreen onRefresh={onRefresh} />,
+  };
+
+  const sidebarBg = tweaks.sidebarColor;
+  const padMain = tweaks.density === 'compact' ? '16px 18px' : tweaks.density === 'spacious' ? '28px 32px' : '20px 24px';
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      {/* ── Sidebar ── */}
+      <aside style={{ width: 220, minHeight: '100vh', background: sidebarBg, display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, zIndex: 100, boxShadow: '2px 0 12px rgba(0,0,0,0.10)' }}>
+        <div style={{ padding: '22px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, background: tweaks.accentColor, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff', fontWeight: 800, flexShrink: 0 }}>SKS</div>
+            <div>
+              <div style={{ color: '#fff', fontWeight: 700, fontSize: 13, letterSpacing: '-0.2px', lineHeight: 1.3 }}>{biz.businessName}</div>
+              <div style={{ color: 'rgba(255,255,255,0.38)', fontSize: 10.5 }}>Wholesale Enterprise</div>
+            </div>
+          </div>
+        </div>
+
+        <nav style={{ flex: 1, padding: '12px 10px' }}>
+          {NAV_ITEMS.map(item => {
+            const isActive = screen === item.id;
+            const badge = item.id === 'inventory' && lowStockCount > 0 ? lowStockCount : item.id === 'billing' && pendingCount > 0 ? pendingCount : null;
+            return (
+              <button key={item.id} onClick={() => navigate(item.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 11, width: '100%',
+                padding: '9px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                marginBottom: 2, textAlign: 'left', fontSize: 13.5,
+                fontWeight: isActive ? 600 : 400,
+                background: isActive ? 'rgba(255,255,255,0.11)' : 'transparent',
+                color: isActive ? '#fff' : 'rgba(255,255,255,0.52)',
+                transition: 'all 0.14s', position: 'relative', fontFamily: 'Open Sans,sans-serif'
+              }}
+                onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background='rgba(255,255,255,0.06)'; e.currentTarget.style.color='#fff'; }}}
+                onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='rgba(255,255,255,0.52)'; }}}
+              >
+                {isActive && <div style={{ position: 'absolute', left: 0, top: '18%', bottom: '18%', width: 3, background: tweaks.accentColor, borderRadius: '0 3px 3px 0' }} />}
+                <span style={{ fontSize: 15, width: 18, textAlign: 'center' }}>{item.icon}</span>
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {badge && <span style={{ background: 'oklch(0.65 0.15 25)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10 }}>{badge}</span>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'oklch(0.65 0.09 160)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+              {(DB.auth.getUser() || 'A')[0].toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: '#fff', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{DB.auth.getUser()}</div>
+              <div style={{ color: 'rgba(255,255,255,0.38)', fontSize: 10.5 }}>Admin</div>
+            </div>
+            <button onClick={handleLogout} title="Logout" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 14, padding: 4 }}
+              onMouseEnter={e => e.currentTarget.style.color='#fff'}
+              onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.4)'}
+            >⏻</button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <div style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)' }}>
+        {/* Navbar */}
+        <header style={{ height: 58, background: 'var(--header-bg)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 24px', gap: 14, position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 1px 4px var(--shadow)' }}>
+          <div style={{ flex: 1, fontSize: 17, fontWeight: 700, color: 'var(--text1)' }}>{SCREEN_TITLES[screen]}</div>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text4)', fontSize: 13 }}>🔍</span>
+            <input placeholder="Search…" style={{ paddingLeft: 28, paddingRight: 12, height: 34, width: 220, border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none', background: 'var(--surface2)', color: 'var(--text1)' }} />
+          </div>
+          {/* Dark mode toggle */}
+          <button onClick={() => setTweak('darkMode', !dark)} title={dark ? 'Switch to Light' : 'Switch to Dark'} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
+            {dark ? '☀️' : '🌙'}
+          </button>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setNotifOpen(v => !v)} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+              🔔
+              {(lowStockCount + pendingCount) > 0 && <span style={{ position: 'absolute', top: 5, right: 5, width: 8, height: 8, background: 'oklch(0.65 0.15 25)', borderRadius: '50%', border: '1.5px solid var(--header-bg)' }} />}
+            </button>
+            {notifOpen && (
+              <div style={{ position: 'absolute', right: 0, top: 42, width: 290, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', zIndex: 200, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontWeight: 700, fontSize: 13, color: 'var(--text1)' }}>Notifications</div>
+                {lowStockCount > 0 && <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border2)', display: 'flex', gap: 10, cursor: 'pointer' }} onClick={() => { navigate('inventory'); setNotifOpen(false); }}>
+                  <span>⚠️</span><div><div style={{ fontSize: 13, color: 'var(--text1)' }}>{lowStockCount} items are low/out of stock</div><div style={{ fontSize: 11, color: 'var(--text4)' }}>Go to Inventory</div></div>
+                </div>}
+                {pendingCount > 0 && <div style={{ padding: '11px 16px', display: 'flex', gap: 10, cursor: 'pointer' }} onClick={() => { navigate('billing'); setNotifOpen(false); }}>
+                  <span>📋</span><div><div style={{ fontSize: 13, color: 'var(--text1)' }}>{pendingCount} invoices pending payment</div><div style={{ fontSize: 11, color: 'var(--text4)' }}>Go to Billing</div></div>
+                </div>}
+                {lowStockCount === 0 && pendingCount === 0 && <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text4)', fontSize: 13 }}>All clear! No alerts.</div>}
+              </div>
+            )}
+          </div>
+          <button onClick={() => navigate('settings')} style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚙️</button>
+        </header>
+
+        <main style={{ flex: 1, padding: padMain }}>
+          <div key={animKey} className="screen-enter">
+            {screens[screen]}
+          </div>
+        </main>
+
+        <footer style={{ padding: '10px 24px', borderTop: '1px solid var(--border)', background: 'var(--header-bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11.5, color: 'var(--text4)' }}>{biz.businessName} · All data saved locally in your browser</span>
+          <span style={{ fontSize: 11.5, color: 'var(--text4)' }}>v2.0</span>
+        </footer>
+      </div>
+
+      {/* Tweaks */}
+      <TweaksPanel>
+        <TweakSection title="Appearance">
+          <TweakToggle label="Dark Mode" value={!!tweaks.darkMode} onChange={v => setTweak('darkMode', v)} />
+          <TweakColor label="Accent Color" value={tweaks.accentColor} onChange={v => setTweak('accentColor', v)} />
+          <TweakColor label="Sidebar Color" value={tweaks.sidebarColor} onChange={v => setTweak('sidebarColor', v)} />
+          <TweakRadio label="Density" value={tweaks.density} onChange={v => setTweak('density', v)} options={['compact', 'comfortable', 'spacious']} />
+        </TweakSection>
+        <TweakSection title="Quick Nav">
+          {NAV_ITEMS.map(item => <TweakButton key={item.id} label={item.label} onClick={() => navigate(item.id)} />)}
+        </TweakSection>
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
