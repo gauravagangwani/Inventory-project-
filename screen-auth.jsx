@@ -40,8 +40,8 @@ function AuthScreen({ onLogin }) {
           background: '#fff', borderRadius: 16, padding: '32px 28px',
           boxShadow: '0 8px 32px rgba(0,0,0,0.10)'
         }}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, color: '#1A2332', marginBottom: 4 }}>Welcome back</h2>
-          <p style={{ color: '#8A96A8', fontSize: 13, marginBottom: 24 }}>Sign in to continue</p>
+          <h2 style={{ fontSize: 17, fontWeight: 700, color: '#1A2332', marginBottom: 4 }}>Admin Login</h2>
+          <p style={{ color: '#8A96A8', fontSize: 13, marginBottom: 24 }}>Sign in to access the dashboard</p>
 
           {error && (
             <div style={{
