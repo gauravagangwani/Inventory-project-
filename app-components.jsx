@@ -189,11 +189,11 @@ function Badge({ label, type }) {
 // Primary Button
 function Btn({ children, onClick, variant = 'primary', size = 'md', icon }) {
   const variants = {
-    primary: { bg: '#2563EB', color: '#fff', border: 'none' },
-    secondary: { bg: '#F1F5F9', color: '#374151', border: '1px solid #E2E8F0' },
-    success: { bg: 'oklch(0.62 0.12 160)', color: '#fff', border: 'none' },
-    danger: { bg: 'oklch(0.60 0.15 25)', color: '#fff', border: 'none' },
-    ghost: { bg: 'transparent', color: '#2563EB', border: '1.5px solid #2563EB' },
+    primary: { background: '#2563EB', color: '#fff', border: 'none' },
+    secondary: { background: 'var(--surface2)', color: 'var(--text1)', border: '1px solid var(--border)' },
+    success: { background: 'oklch(0.62 0.12 160)', color: '#fff', border: 'none' },
+    danger: { background: 'oklch(0.60 0.15 25)', color: '#fff', border: 'none' },
+    ghost: { background: 'transparent', color: '#2563EB', border: '1.5px solid #2563EB' },
   };
   const sizes = {
     sm: { padding: '6px 12px', fontSize: 12 },
